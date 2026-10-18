@@ -20,22 +20,51 @@ jobs:
           node-version: 22
           cache: 'npm'
 
-      - name: Select Xcode 16
+      - name: Select Xcode
         run: |
-          if [ -d "/Applications/Xcode_16.2.app" ]; then
+          echo "Available Xcode installations:"
+          ls -d /Applications/Xcode*.app || true
+
+          if [ -d "/Applications/Xcode_16.4.app" ]; then
+            echo "Selecting Xcode 16.4"
+            sudo xcode-select -s /Applications/Xcode_16.4.app
+            echo "DEVELOPER_DIR=/Applications/Xcode_16.4.app/Contents/Developer" >> $GITHUB_ENV
+          elif [ -d "/Applications/Xcode_16.3.app" ]; then
+            echo "Selecting Xcode 16.3"
+            sudo xcode-select -s /Applications/Xcode_16.3.app
+            echo "DEVELOPER_DIR=/Applications/Xcode_16.3.app/Contents/Developer" >> $GITHUB_ENV
+          elif [ -d "/Applications/Xcode_16.2.app" ]; then
+            echo "Selecting Xcode 16.2"
             sudo xcode-select -s /Applications/Xcode_16.2.app
+            echo "DEVELOPER_DIR=/Applications/Xcode_16.2.app/Contents/Developer" >> $GITHUB_ENV
           elif [ -d "/Applications/Xcode_16.1.app" ]; then
+            echo "Selecting Xcode 16.1"
             sudo xcode-select -s /Applications/Xcode_16.1.app
-          elif [ -d "/Applications/Xcode_16.0.app" ]; then
-            sudo xcode-select -s /Applications/Xcode_16.0.app
+            echo "DEVELOPER_DIR=/Applications/Xcode_16.1.app/Contents/Developer" >> $GITHUB_ENV
           fi
+
           xcodebuild -version
+          swift -version
 
       - name: Install Dependencies
         run: npm install
 
+      - name: Ensure Swift Tools Version Compatibility
+        run: |
+          SWIFT_VER=$(swift -version | grep -oE 'Apple Swift version [0-9]+\.[0-9]+' | awk '{print $4}')
+          echo "Active Swift version: $SWIFT_VER"
+          if [ -n "$SWIFT_VER" ] && [ "$(printf '%s\n' "6.2" "$SWIFT_VER" | sort -V | head -n1)" != "6.2" ]; then
+            echo "Active Swift version $SWIFT_VER is below 6.2; patching swift-tools-version in node_modules"
+            find node_modules/ -name "Package.swift" -exec sed -i '' "s/swift-tools-version: 6.2/swift-tools-version: $SWIFT_VER/g" {} + 2>/dev/null || true
+          fi
+
       - name: Prebuild Native iOS Project
-        run: npx expo prebuild --platform ios --clean
+        run: |
+          npx expo prebuild --platform ios --clean
+          SWIFT_VER=$(swift -version | grep -oE 'Apple Swift version [0-9]+\.[0-9]+' | awk '{print $4}')
+          if [ -n "$SWIFT_VER" ] && [ "$(printf '%s\n' "6.2" "$SWIFT_VER" | sort -V | head -n1)" != "6.2" ]; then
+            find . -name "Package.swift" -exec sed -i '' "s/swift-tools-version: 6.2/swift-tools-version: $SWIFT_VER/g" {} + 2>/dev/null || true
+          fi
 
       - name: Build and Package IPA
         run: |
