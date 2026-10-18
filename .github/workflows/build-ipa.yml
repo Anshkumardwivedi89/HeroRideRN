@@ -20,56 +20,46 @@ jobs:
           node-version: 22
           cache: 'npm'
 
-      - name: Select Xcode
+      - name: Select Xcode 26 (Swift 6.2+)
         run: |
           echo "Available Xcode installations:"
           ls -d /Applications/Xcode*.app || true
 
-          if [ -d "/Applications/Xcode_16.4.app" ]; then
-            echo "Selecting Xcode 16.4"
-            sudo xcode-select -s /Applications/Xcode_16.4.app
-            echo "DEVELOPER_DIR=/Applications/Xcode_16.4.app/Contents/Developer" >> $GITHUB_ENV
-          elif [ -d "/Applications/Xcode_16.3.app" ]; then
-            echo "Selecting Xcode 16.3"
-            sudo xcode-select -s /Applications/Xcode_16.3.app
-            echo "DEVELOPER_DIR=/Applications/Xcode_16.3.app/Contents/Developer" >> $GITHUB_ENV
-          elif [ -d "/Applications/Xcode_16.2.app" ]; then
-            echo "Selecting Xcode 16.2"
-            sudo xcode-select -s /Applications/Xcode_16.2.app
-            echo "DEVELOPER_DIR=/Applications/Xcode_16.2.app/Contents/Developer" >> $GITHUB_ENV
-          elif [ -d "/Applications/Xcode_16.1.app" ]; then
-            echo "Selecting Xcode 16.1"
-            sudo xcode-select -s /Applications/Xcode_16.1.app
-            echo "DEVELOPER_DIR=/Applications/Xcode_16.1.app/Contents/Developer" >> $GITHUB_ENV
+          if [ -d "/Applications/Xcode_26.3.app" ]; then
+            echo "Selecting Xcode 26.3"
+            sudo xcode-select -s /Applications/Xcode_26.3.app
+            echo "DEVELOPER_DIR=/Applications/Xcode_26.3.app/Contents/Developer" >> $GITHUB_ENV
+          elif [ -d "/Applications/Xcode_26.0.app" ]; then
+            echo "Selecting Xcode 26.0"
+            sudo xcode-select -s /Applications/Xcode_26.0.app
+            echo "DEVELOPER_DIR=/Applications/Xcode_26.0.app/Contents/Developer" >> $GITHUB_ENV
+          elif [ -d "/Applications/Xcode_26.app" ]; then
+            echo "Selecting Xcode 26"
+            sudo xcode-select -s /Applications/Xcode_26.app
+            echo "DEVELOPER_DIR=/Applications/Xcode_26.app/Contents/Developer" >> $GITHUB_ENV
+          elif [ -d "/Applications/Xcode.app" ]; then
+            echo "Selecting default Xcode.app"
+            sudo xcode-select -s /Applications/Xcode.app
+            echo "DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer" >> $GITHUB_ENV
           fi
 
           xcodebuild -version
           swift -version
 
-      - name: Install Dependencies
-        run: npm install
-
-      - name: Ensure Swift Compatibility
+      - name: Clean Cache and Build State
         run: |
-          node scripts/fix-swift-compatibility.js
-          find . -name "Package.swift" -exec perl -pi -e 's/swift-tools-version:\s*6\.[2-9]/swift-tools-version: 6.0/g' {} + 2>/dev/null || true
-          find . -name "*.swift" -exec perl -pi -e 's/\bweak\s+let\b/weak var/g' {} + 2>/dev/null || true
+          rm -rf ios/build
+          rm -rf ios/Pods
+          rm -rf ~/Library/Developer/Xcode/DerivedData
+
+      - name: Install Dependencies
+        run: npm ci
 
       - name: Prebuild Native iOS Project
-        run: |
-          npx expo prebuild --platform ios --clean
-          node scripts/fix-swift-compatibility.js
-          find . -name "Package.swift" -exec perl -pi -e 's/swift-tools-version:\s*6\.[2-9]/swift-tools-version: 6.0/g' {} + 2>/dev/null || true
-          find . -name "*.swift" -exec perl -pi -e 's/\bweak\s+let\b/weak var/g' {} + 2>/dev/null || true
+        run: npx expo prebuild --platform ios --clean
 
       - name: Build and Package IPA
         run: |
-          # Patch ios/Pods AFTER pod install — this is where the actual Package.swift lives at build time
-          find ios/Pods -name "Package.swift" -exec perl -pi -e 's/swift-tools-version:\s*6\.[2-9]/swift-tools-version: 6.0/g' {} + 2>/dev/null || true
-          find ios/Pods -name "*.swift" -exec perl -pi -e 's/\bweak\s+let\b/weak var/g' {} + 2>/dev/null || true
-          echo "Patch applied to ios/Pods. Verifying expo-modules-jsi Package.swift:"
-          head -1 ios/Pods/ExpoModulesJSI/apple/Package.swift || true
-
           cd ios
           mkdir -p build/Payload
 
