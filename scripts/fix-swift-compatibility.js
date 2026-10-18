@@ -20,28 +20,35 @@ console.log(`Running Swift compatibility patch (Swift Version Target: ${targetSw
 
 function walkAndPatch(dir) {
   if (!fs.existsSync(dir)) return;
-  const entries = fs.readdirSync(dir, { withFileTypes: true });
+  let entries;
+  try {
+    entries = fs.readdirSync(dir, { withFileTypes: true });
+  } catch (e) {
+    return; // Skip unreadable dirs
+  }
   for (const entry of entries) {
     const fullPath = path.join(dir, entry.name);
     if (entry.isDirectory()) {
-      if (entry.name !== '.git') {
+      if (entry.name !== '.git' && entry.name !== '.DerivedData' && entry.name !== 'build') {
         walkAndPatch(fullPath);
       }
     } else if (entry.isFile()) {
       if (entry.name === 'Package.swift') {
-        let content = fs.readFileSync(fullPath, 'utf8');
+        let content;
+        try { content = fs.readFileSync(fullPath, 'utf8'); } catch (e) { continue; }
         if (/swift-tools-version:\s*6\.[2-9]/.test(content)) {
           console.log(`[Patch] Adjusting swift-tools-version in: ${path.relative(process.cwd(), fullPath)} to ${targetSwiftVer}`);
           content = content.replace(/swift-tools-version:\s*6\.[2-9]/g, `swift-tools-version: ${targetSwiftVer}`);
-          fs.writeFileSync(fullPath, content, 'utf8');
+          try { fs.writeFileSync(fullPath, content, 'utf8'); } catch (e) { console.warn(`  [WARN] Could not write: ${e.message}`); }
         }
       }
       if (entry.name.endsWith('.swift')) {
-        let content = fs.readFileSync(fullPath, 'utf8');
+        let content;
+        try { content = fs.readFileSync(fullPath, 'utf8'); } catch (e) { continue; }
         if (/weak\s+let\b/.test(content)) {
           console.log(`[Patch] Converting 'weak let' to 'weak var' in: ${path.relative(process.cwd(), fullPath)}`);
           content = content.replace(/\bweak\s+let\b/g, 'weak var');
-          fs.writeFileSync(fullPath, content, 'utf8');
+          try { fs.writeFileSync(fullPath, content, 'utf8'); } catch (e) { console.warn(`  [WARN] Could not write: ${e.message}`); }
         }
       }
     }
@@ -49,11 +56,13 @@ function walkAndPatch(dir) {
 }
 
 const projectRoot = path.resolve(__dirname, '..');
-const nodeModules = path.join(projectRoot, 'node_modules');
-const iosDir = path.join(projectRoot, 'ios');
 
+// Patch node_modules (before prebuild)
+const nodeModules = path.join(projectRoot, 'node_modules');
 walkAndPatch(nodeModules);
-if (fs.existsSync(iosDir)) {
-  walkAndPatch(iosDir);
-}
+
+// Patch ios/ including ios/Pods/ (after prebuild + pod install)
+const iosDir = path.join(projectRoot, 'ios');
+walkAndPatch(iosDir);
+
 console.log('Swift compatibility patch completed.');

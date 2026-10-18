@@ -64,6 +64,12 @@ jobs:
 
       - name: Build and Package IPA
         run: |
+          # Patch ios/Pods AFTER pod install — this is where the actual Package.swift lives at build time
+          find ios/Pods -name "Package.swift" -exec perl -pi -e 's/swift-tools-version:\s*6\.[2-9]/swift-tools-version: 6.0/g' {} + 2>/dev/null || true
+          find ios/Pods -name "*.swift" -exec perl -pi -e 's/\bweak\s+let\b/weak var/g' {} + 2>/dev/null || true
+          echo "Patch applied to ios/Pods. Verifying expo-modules-jsi Package.swift:"
+          head -1 ios/Pods/ExpoModulesJSI/apple/Package.swift || true
+
           cd ios
           mkdir -p build/Payload
 
