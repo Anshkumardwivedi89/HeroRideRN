@@ -50,12 +50,17 @@ jobs:
         run: npm install
 
       - name: Ensure Swift Compatibility
-        run: node scripts/fix-swift-compatibility.js
+        run: |
+          node scripts/fix-swift-compatibility.js
+          find . -name "Package.swift" -exec perl -pi -e 's/swift-tools-version:\s*6\.[2-9]/swift-tools-version: 6.0/g' {} + 2>/dev/null || true
+          find . -name "*.swift" -exec perl -pi -e 's/\bweak\s+let\b/weak var/g' {} + 2>/dev/null || true
 
       - name: Prebuild Native iOS Project
         run: |
           npx expo prebuild --platform ios --clean
           node scripts/fix-swift-compatibility.js
+          find . -name "Package.swift" -exec perl -pi -e 's/swift-tools-version:\s*6\.[2-9]/swift-tools-version: 6.0/g' {} + 2>/dev/null || true
+          find . -name "*.swift" -exec perl -pi -e 's/\bweak\s+let\b/weak var/g' {} + 2>/dev/null || true
 
       - name: Build and Package IPA
         run: |

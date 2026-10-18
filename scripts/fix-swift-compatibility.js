@@ -28,18 +28,19 @@ function walkAndPatch(dir) {
         walkAndPatch(fullPath);
       }
     } else if (entry.isFile()) {
+      if (entry.name === 'Package.swift') {
+        let content = fs.readFileSync(fullPath, 'utf8');
+        if (/swift-tools-version:\s*6\.[2-9]/.test(content)) {
+          console.log(`[Patch] Adjusting swift-tools-version in: ${path.relative(process.cwd(), fullPath)} to ${targetSwiftVer}`);
+          content = content.replace(/swift-tools-version:\s*6\.[2-9]/g, `swift-tools-version: ${targetSwiftVer}`);
+          fs.writeFileSync(fullPath, content, 'utf8');
+        }
+      }
       if (entry.name.endsWith('.swift')) {
         let content = fs.readFileSync(fullPath, 'utf8');
         if (/weak\s+let\b/.test(content)) {
           console.log(`[Patch] Converting 'weak let' to 'weak var' in: ${path.relative(process.cwd(), fullPath)}`);
           content = content.replace(/\bweak\s+let\b/g, 'weak var');
-          fs.writeFileSync(fullPath, content, 'utf8');
-        }
-      } else if (entry.name === 'Package.swift') {
-        let content = fs.readFileSync(fullPath, 'utf8');
-        if (content.includes('swift-tools-version: 6.2')) {
-          console.log(`[Patch] Adjusting swift-tools-version in: ${path.relative(process.cwd(), fullPath)} to ${targetSwiftVer}`);
-          content = content.replace(/swift-tools-version:\s*6\.2/g, `swift-tools-version: ${targetSwiftVer}`);
           fs.writeFileSync(fullPath, content, 'utf8');
         }
       }
