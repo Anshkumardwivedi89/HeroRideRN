@@ -40,15 +40,27 @@ export const BluetoothScanScreen: React.FC = () => {
 
   const [manualId, setManualId] = useState('');
   const [showManualModal, setShowManualModal] = useState(false);
+  const [connectingDeviceId, setConnectingDeviceId] = useState<string | null>(null);
+
+  const handleConnect = async (id: string) => {
+    setConnectingDeviceId(id);
+    try {
+      await connectToDevice(id);
+    } finally {
+      setConnectingDeviceId(null);
+    }
+  };
 
   const handleManualConnect = async () => {
     if (!manualId.trim()) return;
+    const id = manualId.trim();
     setShowManualModal(false);
-    await connectToDevice(manualId.trim());
+    await handleConnect(id);
   };
 
   const renderDeviceItem = ({ item }: { item: DiscoveredClusterDevice }) => {
     const isThisConnected = isConnected && connectedDeviceName?.includes(item.id);
+    const isThisDeviceConnecting = isConnecting && connectingDeviceId === item.id;
 
     return (
       <View style={[styles.deviceItem, item.isHeroCluster && styles.heroDeviceItem]}>
@@ -77,17 +89,18 @@ export const BluetoothScanScreen: React.FC = () => {
             styles.connectBtn,
             isThisConnected && styles.connectedBtn,
             item.isHeroCluster && !isThisConnected && styles.heroConnectBtn,
+            isConnecting && !isThisDeviceConnecting && { opacity: 0.5 },
           ]}
           disabled={isConnecting}
           onPress={() => {
             if (isThisConnected) {
               disconnect();
             } else {
-              connectToDevice(item.id);
+              handleConnect(item.id);
             }
           }}
         >
-          {isConnecting ? (
+          {isThisDeviceConnecting ? (
             <ActivityIndicator size="small" color="#FFFFFF" />
           ) : (
             <Text style={styles.connectBtnText}>
