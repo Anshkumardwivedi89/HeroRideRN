@@ -1,0 +1,62 @@
+name: Build Sideloadable iOS IPA
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main, master ]
+
+jobs:
+  build-ipa:
+    name: Build Unsigned IPA for Sideloadly
+    runs-on: macos-14
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm install
+
+      - name: Prebuild Native iOS Project
+        run: npx expo prebuild --platform ios --clean
+
+      - name: Build and Package IPA
+        run: |
+          cd ios
+          mkdir -p build/Payload
+
+          # Find the generated workspace
+          WORKSPACE=$(ls -d *.xcworkspace | head -n 1)
+          SCHEME=$(basename "$WORKSPACE" .xcworkspace)
+          echo "Building Workspace: $WORKSPACE with Scheme: $SCHEME"
+
+          # Build .app bundle without code signing requirement
+          xcodebuild -workspace "$WORKSPACE" \
+            -scheme "$SCHEME" \
+            -sdk iphoneos \
+            -configuration Release \
+            -derivedDataPath build/DerivedData \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            build
+
+          # Copy built .app into Payload directory
+          cp -r build/DerivedData/Build/Products/Release-iphoneos/*.app build/Payload/
+
+          # Package Payload into .ipa archive
+          cd build
+          zip -r HeroRide.ipa Payload
+
+      - name: Upload IPA Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: HeroRide-iOS-IPA
+          path: ios/build/HeroRide.ipa
+          retention-days: 7

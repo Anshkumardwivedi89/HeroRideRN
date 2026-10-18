@@ -1,25 +1,60 @@
 {
   "expo": {
-    "name": "HeroRideRN",
-    "slug": "HeroRideRN",
+    "name": "HeroRide",
+    "slug": "heroride-companion",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "backgroundColor": "#0F141A"
+    },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": false,
+      "bundleIdentifier": "com.heroride.app",
+      "infoPlist": {
+        "NSBluetoothAlwaysUsageDescription": "HeroRide requires Bluetooth to connect to and mirror navigation and alerts on your Hero scooter digital cluster.",
+        "NSBluetoothPeripheralUsageDescription": "HeroRide communicates with your scooter cluster via Bluetooth Low Energy.",
+        "NSLocationWhenInUseUsageDescription": "Required to calculate your current speed and distance for turn-by-turn navigation.",
+        "UIBackgroundModes": [
+          "bluetooth-central",
+          "location"
+        ]
+      }
     },
     "android": {
+      "package": "com.heroride.app",
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
+        "backgroundColor": "#0F141A",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "permissions": [
+        "android.permission.BLUETOOTH",
+        "android.permission.BLUETOOTH_ADMIN",
+        "android.permission.BLUETOOTH_CONNECT",
+        "android.permission.BLUETOOTH_SCAN",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION"
+      ]
     },
-    "web": {
-      "favicon": "./assets/favicon.png"
+    "plugins": [
+      [
+        "react-native-ble-plx",
+        {
+          "isBackgroundEnabled": true,
+          "modes": [
+            "central"
+          ],
+          "bluetoothAlwaysPermission": "HeroRide requires Bluetooth to connect to and mirror navigation and alerts on your Hero scooter digital cluster."
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "f9a9e4dc-7e76-4405-9573-257a5ba8ba9f"
+      }
     }
   }
 }
