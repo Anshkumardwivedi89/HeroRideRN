@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, FlatList, Platform } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Platform } from 'react-native';
 import { Colors } from '../theme/colors';
 import { BlePacketLog } from '../protocol/types';
 
@@ -60,12 +60,17 @@ export const PacketLogView: React.FC<PacketLogViewProps> = ({ logs, maxHeight = 
           <Text style={styles.emptyText}>No packets transmitted yet</Text>
         </View>
       ) : (
-        <FlatList
-          data={logs}
-          keyExtractor={(item) => item.id}
-          renderItem={renderItem}
-          contentContainerStyle={styles.listContent}
-        />
+        <ScrollView
+          style={styles.listContent}
+          nestedScrollEnabled={true}
+          showsVerticalScrollIndicator={true}
+        >
+          {logs.map((item) => (
+            <React.Fragment key={item.id}>
+              {renderItem({ item })}
+            </React.Fragment>
+          ))}
+        </ScrollView>
       )}
     </View>
   );
