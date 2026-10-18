@@ -18,7 +18,13 @@ interface BleContextValue {
   stopScan: () => void;
   connectToDevice: (deviceId: string) => Promise<void>;
   disconnect: () => Promise<void>;
-  sendNavigation: (icon: ManeuverIconCode, distanceMeters: number, streetName: string) => void;
+  sendNavigation: (
+    icon: ManeuverIconCode,
+    distanceMeters: number,
+    streetName: string,
+    eta?: { hours?: number; minutes?: number; isPm?: boolean },
+    remainingMinutes?: number
+  ) => void;
   clearNavigation: () => void;
   sendIncomingCall: (callerNameOrNumber: string) => void;
   sendActiveCall: (callerNameOrNumber: string, seconds: number) => void;
@@ -69,7 +75,8 @@ export const BleProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     stopScan: () => BleService.stopScan(),
     connectToDevice: (id) => BleService.connectToDevice(id),
     disconnect: () => BleService.disconnect(),
-    sendNavigation: (icon, dist, street) => BleService.sendNavigation(icon, dist, street),
+    sendNavigation: (icon, dist, street, eta, rem) =>
+      BleService.sendNavigation(icon, dist, street, eta, rem),
     clearNavigation: () => BleService.clearNavigation(),
     sendIncomingCall: (caller) => BleService.sendIncomingCall(caller),
     sendActiveCall: (caller, sec) => BleService.sendActiveCall(caller, sec),

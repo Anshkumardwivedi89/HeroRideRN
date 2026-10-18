@@ -388,14 +388,26 @@ class BleServiceImpl {
   // Queued Transmission Engine
   // ──────────────────────────────────────────────────────────────────
 
-  public sendNavigation(icon: ManeuverIconCode, distanceMeters: number, streetName: string) {
-    const packet = HeroClusterProtocol.buildNavigationPacket(icon, distanceMeters, streetName);
+  public sendNavigation(
+    icon: ManeuverIconCode,
+    distanceMeters: number,
+    streetName: string,
+    eta?: { hours?: number; minutes?: number; isPm?: boolean },
+    remainingMinutes?: number
+  ) {
+    const packet = HeroClusterProtocol.buildNavigationPacket(
+      icon,
+      distanceMeters,
+      streetName,
+      eta,
+      remainingMinutes
+    );
     this.enqueueWrite(packet, `Nav: ${icon} | ${distanceMeters}m | ${streetName}`);
   }
 
   public clearNavigation() {
     const packet = HeroClusterProtocol.buildClearNavigationPacket();
-    this.enqueueWrite(packet, 'Clear Navigation');
+    this.enqueueWrite(packet, 'Clear Navigation (Trip Completed)');
   }
 
   public sendIncomingCall(callerNameOrNumber: string) {
@@ -434,11 +446,13 @@ class BleServiceImpl {
   }
 
   public sendRawData(payload: string) {
-    this.enqueueWrite(payload, 'Raw Payload');
+    const framed = HeroClusterProtocol.frameClusterPacket(payload);
+    this.enqueueWrite(framed, 'Raw Payload');
   }
 
   private enqueueWrite(payload: string, description: string) {
-    this.writeQueue.push({ payload, description });
+    const framed = HeroClusterProtocol.frameClusterPacket(payload);
+    this.writeQueue.push({ payload: framed, description });
     this.processWriteQueue();
   }
 
@@ -466,7 +480,8 @@ class BleServiceImpl {
     }
 
     try {
-      const base64Payload = Buffer.from(payload, 'utf-8').toString('base64');
+      // Official Hero app encodes bytes with Charset.forName("CP-1252") (Windows-1252 / latin1)
+      const base64Payload = Buffer.from(payload, 'latin1').toString('base64');
       await this.connectedDevice.writeCharacteristicWithoutResponseForService(
         this.activeServiceUuid,
         this.activeWriteCharUuid,
@@ -476,7 +491,7 @@ class BleServiceImpl {
     } catch (err: any) {
       // Fall back to write with response if without-response fails
       try {
-        const base64Payload = Buffer.from(payload, 'utf-8').toString('base64');
+        const base64Payload = Buffer.from(payload, 'latin1').toString('base64');
         await this.connectedDevice.writeCharacteristicWithResponseForService(
           this.activeServiceUuid,
           this.activeWriteCharUuid,

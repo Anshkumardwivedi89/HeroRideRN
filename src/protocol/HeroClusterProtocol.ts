@@ -42,6 +42,16 @@ export class HeroClusterProtocol {
   private static readonly PAD_CHAR = '~';
 
   /**
+   * Enforces official cluster UART packet framing (\n<payload>\n).
+   * Hero clusters' circular buffer UART parser requires \n as both Start of Frame (SOF)
+   * and End of Frame (EOF). Packets lacking the opening \n are dropped by the cluster MCU.
+   */
+  public static frameClusterPacket(payload: string): string {
+    const clean = (payload || '').replace(/^\n+|\n+$/g, '');
+    return `\n${clean}\n`;
+  }
+
+  /**
    * Pads or truncates a string with '~' up to the exact display length for LCD segment alignment.
    */
   public static padString(str: string, targetLength: IntNumber): string {
@@ -54,28 +64,70 @@ export class HeroClusterProtocol {
 
   // ──────────────────────────────────────────────────────────────────
   // Turn-By-Turn Navigation Packets
-  // Format: M<IconCode>~<DistanceMeters>~<StreetNamePadded>~\n
+  // Format for LCD Cluster (Hero Xoom, Maestro, Pleasure+ LCD, JFW51 - model 191):
+  // \n1<binaryDIR><roundaboutExit><etaHour><etaMinute><meridian>0m000<dist><unit><remTime>~00<streetName>\n
   // ──────────────────────────────────────────────────────────────────
 
   /**
    * Encodes turn-by-turn navigation data into byte string for Hero cluster LCD.
+   * Matches NavigateFragment.sendDataToSpeedoMeter reverse-engineered from official Hero APK.
    */
   public static buildNavigationPacket(
     icon: ManeuverIconCode,
     distanceMeters: number,
-    streetName: string
+    streetName: string,
+    eta?: { hours?: number; minutes?: number; isPm?: boolean },
+    remainingMinutes = 15
   ): string {
+    const clampedDist = Math.max(0, Math.min(Math.round(distanceMeters), 99999));
+    let distStr: string;
+    let distUnit: string;
+
+    if (clampedDist < 1000) {
+      distStr = String(clampedDist).padStart(5, '0');
+      distUnit = 'm';
+    } else {
+      const km = (clampedDist / 1000).toFixed(1);
+      distStr = String(km).padStart(5, '0');
+      distUnit = 'k';
+    }
+
+    // Default ETA to current time + estimated minutes if not provided
+    const now = new Date();
+    const etaDate = new Date(now.getTime() + remainingMinutes * 60000);
+    const h = eta?.hours ?? (etaDate.getHours() % 12 || 12);
+    const m = eta?.minutes ?? etaDate.getMinutes();
+    const isPm = eta?.isPm ?? (etaDate.getHours() >= 12);
+    const etaHour = String(h).padStart(2, '0');
+    const etaMinute = String(m).padStart(2, '0');
+    const meridian = isPm ? 'p' : 'a';
+
+    const remTimeStr = String(Math.min(remainingMinutes, 9999)).padStart(4, '0');
+
+    // Roundabout exit code
+    let roundaboutExit = '00';
+    if (icon === ManeuverIconCode.ROUNDABOUT_EXIT_1) roundaboutExit = '01';
+    else if (icon === ManeuverIconCode.ROUNDABOUT_EXIT_2) roundaboutExit = '02';
+    else if (icon === ManeuverIconCode.ROUNDABOUT_EXIT_3) roundaboutExit = '03';
+    else if (icon === ManeuverIconCode.ROUNDABOUT_EXIT_4) roundaboutExit = '04';
+    else if (icon === ManeuverIconCode.ROUNDABOUT_EXIT_5) roundaboutExit = '05';
+    else if (icon === ManeuverIconCode.ROUNDABOUT_EXIT_6) roundaboutExit = '06';
+
     const paddedStreet = this.padString(streetName, this.MAX_STREET_LENGTH);
-    const clampedDist = Math.min(Math.max(Math.round(distanceMeters), 0), 99999);
-    return `M${icon}~${clampedDist}~${paddedStreet}~\n`;
+
+    // Official 128-bit cluster LCD navigation frame:
+    // '1' + binaryDIR + roundaboutExit(2) + etaHour(2) + etaMinute(2) + meridian(1) +
+    // '0' + 'm' + '00' + '0' + distStr(5) + distUnit(1) + remTime(4) + '~' + '00' + paddedStreet
+    const packet = `1${icon}${roundaboutExit}${etaHour}${etaMinute}${meridian}0m000${distStr}${distUnit}${remTimeStr}~00${paddedStreet}`;
+    return this.frameClusterPacket(packet);
   }
 
   /**
    * Encodes route cleared / navigation stopped packet.
+   * Matches official Hero APK trip_Completed frame: \n1H00000100M00S00\n
    */
   public static buildClearNavigationPacket(): string {
-    const emptyStreet = this.padString('', this.MAX_STREET_LENGTH);
-    return `M00~0~${emptyStreet}~\n`;
+    return this.frameClusterPacket('1H00000100M00S00');
   }
 
   // ──────────────────────────────────────────────────────────────────
@@ -87,7 +139,7 @@ export class HeroClusterProtocol {
    */
   public static buildIncomingCallPacket(callerNameOrNumber: string): string {
     const paddedName = this.padString(callerNameOrNumber || 'Unknown', this.MAX_NAME_LENGTH);
-    return `1${paddedName}~\n`;
+    return this.frameClusterPacket(`1${paddedName}~`);
   }
 
   /**
@@ -96,7 +148,7 @@ export class HeroClusterProtocol {
   public static buildActiveCallPacket(callerNameOrNumber: string, durationSeconds: number): string {
     const paddedName = this.padString(callerNameOrNumber || 'Unknown', this.MAX_NAME_LENGTH);
     const sec = Math.max(Math.round(durationSeconds), 0);
-    return `2${paddedName}~${sec}~\n`;
+    return this.frameClusterPacket(`2${paddedName}~${sec}~`);
   }
 
   /**
@@ -104,7 +156,7 @@ export class HeroClusterProtocol {
    */
   public static buildOutgoingCallPacket(calleeNameOrNumber: string): string {
     const paddedName = this.padString(calleeNameOrNumber || 'Unknown', this.MAX_NAME_LENGTH);
-    return `3${paddedName}~\n`;
+    return this.frameClusterPacket(`3${paddedName}~`);
   }
 
   /**
@@ -112,14 +164,14 @@ export class HeroClusterProtocol {
    */
   public static buildMissedCallPacket(missedCount: number): string {
     const count = Math.max(Math.round(missedCount), 1);
-    return `5${count}\n`;
+    return this.frameClusterPacket(`5${count}`);
   }
 
   /**
    * Call ended / idle state. Opcode '7'
    */
   public static buildCallEndedPacket(): string {
-    return `7~0~d\n`;
+    return this.frameClusterPacket('7~0~d');
   }
 
   // ──────────────────────────────────────────────────────────────────
@@ -131,7 +183,7 @@ export class HeroClusterProtocol {
    */
   public static buildSmsAlertPacket(senderNameOrNumber: string): string {
     const paddedSender = this.padString(senderNameOrNumber || 'New SMS', this.MAX_NAME_LENGTH);
-    return `6${paddedSender}~\n`;
+    return this.frameClusterPacket(`6${paddedSender}~`);
   }
 
   // ──────────────────────────────────────────────────────────────────
@@ -148,14 +200,14 @@ export class HeroClusterProtocol {
   ): string {
     const clampedBatt = Math.min(Math.max(Math.round(batteryPercent), 0), 100);
     const clampedSignal = Math.min(Math.max(Math.round(signalBars), 0), 4);
-    return `4${clampedBatt}~${clampedSignal}~${networkType}~\n`;
+    return this.frameClusterPacket(`4${clampedBatt}~${clampedSignal}~${networkType}~`);
   }
 
   /**
    * Low phone battery warning packet.
    */
   public static buildLowBatteryWarningPacket(): string {
-    return `30124\n`;
+    return this.frameClusterPacket('30124');
   }
 
   // ──────────────────────────────────────────────────────────────────
@@ -169,7 +221,7 @@ export class HeroClusterProtocol {
     const paddedTitle = this.padString(title, 12);
     const paddedArtist = this.padString(artist, 10);
     const state = isPlaying ? '1' : '0';
-    return `9${paddedTitle}~${paddedArtist}~${state}~\n`;
+    return this.frameClusterPacket(`9${paddedTitle}~${paddedArtist}~${state}~`);
   }
 
   // ──────────────────────────────────────────────────────────────────

@@ -1,21 +1,21 @@
 export enum ManeuverIconCode {
-  STRAIGHT = '00',
-  SLIGHT_RIGHT = '01',
-  TURN_RIGHT = '02',
-  SHARP_RIGHT = '03',
-  U_TURN_RIGHT = '04',
-  U_TURN_LEFT = '05',
-  SHARP_LEFT = '06',
-  TURN_LEFT = '07',
-  SLIGHT_LEFT = '08',
-  ROUNDABOUT_EXIT_1 = '09',
-  ROUNDABOUT_EXIT_2 = '10',
-  ROUNDABOUT_EXIT_3 = '11',
-  ROUNDABOUT_EXIT_4 = '12',
-  ROUNDABOUT_EXIT_5 = '13',
-  ROUNDABOUT_EXIT_6 = '14',
-  DESTINATION_REACHED = '15',
-  RECALCULATING = '16',
+  STRAIGHT = 'E', // '0' -> 'E'
+  SLIGHT_RIGHT = 'Q', // '1' -> 'Q'
+  TURN_RIGHT = 'J', // '2' -> 'J'
+  SHARP_RIGHT = 'B', // '20' / '50' -> 'B'
+  U_TURN_RIGHT = 'O', // '5' -> 'O'
+  U_TURN_LEFT = 'V', // '41' -> 'V'
+  SHARP_LEFT = 'H', // '6' -> 'H'
+  TURN_LEFT = 'D', // '15' -> 'D'
+  SLIGHT_LEFT = 'C', // '14' -> 'C'
+  ROUNDABOUT_EXIT_1 = 'U', // '64' -> 'U'
+  ROUNDABOUT_EXIT_2 = 'N', // '57' -> 'N'
+  ROUNDABOUT_EXIT_3 = 'K', // '72' -> 'K'
+  ROUNDABOUT_EXIT_4 = 'L', // '74' -> 'L'
+  ROUNDABOUT_EXIT_5 = 'G', // '75' -> 'G'
+  ROUNDABOUT_EXIT_6 = 'P', // '36' -> 'P'
+  DESTINATION_REACHED = 'T', // 'Ferry Train' / 'T' / Arrival
+  RECALCULATING = 'Z', // '18' -> 'Z'
 }
 
 export interface ManeuverInfo {
