@@ -2,6 +2,15 @@ name: Build Sideloadable iOS IPA
 
 on:
   workflow_dispatch:
+    inputs:
+      build_type:
+        description: 'Build Configuration (Release = Standalone offline app without computer; Debug = Metro development client)'
+        required: true
+        default: 'Release'
+        type: choice
+        options:
+          - Release
+          - Debug
   push:
     branches: [ main, master ]
 
@@ -60,20 +69,23 @@ jobs:
 
       - name: Build and Package IPA
         run: |
+          BUILD_CONFIG="${{ github.event.inputs.build_type || 'Release' }}"
+          echo "Selected Build Configuration: $BUILD_CONFIG"
+
           cd ios
           mkdir -p build/Payload
 
           # Find the generated workspace
           WORKSPACE=$(ls -d *.xcworkspace | head -n 1)
           SCHEME=$(basename "$WORKSPACE" .xcworkspace)
-          echo "Building Workspace: $WORKSPACE with Scheme: $SCHEME"
+          echo "Building Workspace: $WORKSPACE with Scheme: $SCHEME (Mode: $BUILD_CONFIG)"
 
-          # Build Development Client .app bundle with Debug configuration
+          # Build .app bundle (Release mode bundles all JavaScript and assets offline)
           xcodebuild -workspace "$WORKSPACE" \
             -scheme "$SCHEME" \
             -sdk iphoneos \
             -destination "generic/platform=iOS" \
-            -configuration Debug \
+            -configuration "$BUILD_CONFIG" \
             -derivedDataPath build/DerivedData \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
@@ -82,7 +94,7 @@ jobs:
             build
 
           # Copy built .app into Payload directory
-          cp -r build/DerivedData/Build/Products/Debug-iphoneos/*.app build/Payload/
+          cp -r build/DerivedData/Build/Products/${BUILD_CONFIG}-iphoneos/*.app build/Payload/
 
           # Package Payload into .ipa archive
           cd build
@@ -91,6 +103,6 @@ jobs:
       - name: Upload IPA Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: HeroRide-iOS-IPA
+          name: HeroRide-iOS-Release-IPA
           path: ios/build/HeroRide.ipa
           retention-days: 7
