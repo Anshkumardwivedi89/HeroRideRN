@@ -59,7 +59,9 @@ export const BluetoothScanScreen: React.FC = () => {
   };
 
   const renderDeviceItem = ({ item }: { item: DiscoveredClusterDevice }) => {
-    const isThisConnected = isConnected && connectedDeviceName?.includes(item.id);
+    const isThisConnected =
+      isConnected &&
+      Boolean(connectedDeviceName && (connectedDeviceName === item.name || connectedDeviceName.includes(item.id)));
     const isThisDeviceConnecting = isConnecting && connectingDeviceId === item.id;
 
     return (

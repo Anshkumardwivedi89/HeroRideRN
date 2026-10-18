@@ -63,7 +63,7 @@ export interface DiscoveredClusterDevice {
 export interface BlePacketLog {
   id: string;
   timestamp: string;
-  direction: 'TX' | 'RX' | 'INFO' | 'ERROR';
+  direction: 'TX' | 'RX' | 'INFO' | 'WARN' | 'ERROR';
   rawPayload: string;
   description: string;
 }

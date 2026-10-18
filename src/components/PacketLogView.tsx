@@ -19,6 +19,9 @@ export const PacketLogView: React.FC<PacketLogViewProps> = ({ logs, maxHeight = 
     } else if (item.direction === 'RX') {
       tagColor = Colors.accentBlue;
       tagBg = 'rgba(41, 182, 246, 0.15)';
+    } else if (item.direction === 'WARN') {
+      tagColor = Colors.accentYellow;
+      tagBg = 'rgba(255, 179, 0, 0.15)';
     } else if (item.direction === 'ERROR') {
       tagColor = Colors.heroRed;
       tagBg = Colors.heroRedMuted;

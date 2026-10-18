@@ -7,10 +7,25 @@ import { ManeuverIconCode } from './types';
  * Packets are UTF-8 / US-ASCII strings, fields separated and padded with '~', terminated by '\n'.
  */
 export class HeroClusterProtocol {
-  // Telit Terminal I/O (TIO) GATT Specifications
+  // Official Hero MotoCorp 128-bit GATT specifications (verified from official APK)
+  public static readonly HERO_PRIMARY_SERVICE_UUID = 'E837D9A2-9C49-4493-9547-8E6918A59CA8';
+  public static readonly HERO_WRITE_CHAR_UUID = '64AECB40-849A-44F1-934F-ADDC4B316423'; // UART RX (Write to cluster)
+  public static readonly HERO_NOTIFY_CHAR_UUID = 'B792A4BB-DB87-436A-9066-DB63C5FB3F00'; // UART TX (Notify from cluster)
+  public static readonly HERO_CREDITS_RX_CHAR_UUID = 'F535DD6E-7975-4ABD-9719-491E38A81179'; // Flow credits write to cluster
+  public static readonly HERO_CREDITS_TX_CHAR_UUID = '36E8614B-2DED-45C1-9AD3-C9F59A01F21E'; // Flow credits indication from cluster
+
+  // Legacy Telit Terminal I/O (TIO) 16-bit GATT fallback specifications
   public static readonly TELIT_SERVICE_UUID = '0000FEFB-0000-1000-8000-00805F9B34FB';
   public static readonly TELIT_RX_CHAR_UUID = '00000001-0000-1000-8000-008025000000'; // Write to cluster
   public static readonly TELIT_TX_CHAR_UUID = '00000002-0000-1000-8000-008025000000'; // Notify from cluster
+  public static readonly TELIT_CREDITS_RX_CHAR_UUID = '00000003-0000-1000-8000-008025000000';
+  public static readonly TELIT_CREDITS_TX_CHAR_UUID = '00000004-0000-1000-8000-008025000000';
+
+  // Standard Client Characteristic Configuration Descriptor (CCCD)
+  public static readonly CCCD_UUID = '00002902-0000-1000-8000-00805F9B34FB';
+
+  // Initial credits granted to cluster to initialize UART write buffer
+  public static readonly INITIAL_FLOW_CREDITS = 10;
 
   // Alternative cluster UUIDs discovered in Hero cluster firmwares
   public static readonly SECONDARY_SERVICE_UUIDS = [

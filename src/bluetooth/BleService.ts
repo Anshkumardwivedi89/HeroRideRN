@@ -24,6 +24,14 @@ class BleServiceImpl {
   private writeQueue: { payload: string; description: string }[] = [];
   private isWriting = false;
 
+  // Active GATT configuration (resolved dynamically during discovery)
+  private activeServiceUuid = HeroClusterProtocol.HERO_PRIMARY_SERVICE_UUID;
+  private activeWriteCharUuid = HeroClusterProtocol.HERO_WRITE_CHAR_UUID;
+  private activeNotifyCharUuid = HeroClusterProtocol.HERO_NOTIFY_CHAR_UUID;
+  private activeCreditsRxCharUuid = HeroClusterProtocol.HERO_CREDITS_RX_CHAR_UUID;
+  private activeCreditsTxCharUuid = HeroClusterProtocol.HERO_CREDITS_TX_CHAR_UUID;
+  private isHandshakeComplete = false;
+
   // Listeners
   private stateListeners = new Set<Listener<BleConnectionState>>();
   private devicesListeners = new Set<Listener<DiscoveredClusterDevice[]>>();
@@ -125,19 +133,26 @@ class BleServiceImpl {
     id: string,
     serviceUUIDs?: string[] | null
   ): boolean {
-    // 1. Check if the device advertises the Telit TIO Service UUID (0000FEFB...)
+    // 1. Check if the device advertises Hero 128-bit or Telit TIO Service UUIDs
     if (serviceUUIDs && serviceUUIDs.length > 0) {
-      const hasTelit = serviceUUIDs.some((uuid) => {
+      const hasHeroOrTelit = serviceUUIDs.some((uuid) => {
         const u = uuid.toUpperCase();
-        return u.includes('FEFB') || u === HeroClusterProtocol.TELIT_SERVICE_UUID.toUpperCase();
+        return (
+          u.includes('E837') ||
+          u === HeroClusterProtocol.HERO_PRIMARY_SERVICE_UUID.toUpperCase() ||
+          u.includes('FEFB') ||
+          u === HeroClusterProtocol.TELIT_SERVICE_UUID.toUpperCase()
+        );
       });
-      if (hasTelit) return true;
+      if (hasHeroOrTelit) return true;
     }
 
     // 2. Check device broadcast name
     if (!name) return false;
     const n = name.toUpperCase();
     return (
+      n.includes('JFW') ||
+      n.includes('JFW51') ||
       n.includes('HERO') ||
       n.includes('HMCL') ||
       n.includes('XOOM') ||
@@ -170,18 +185,22 @@ class BleServiceImpl {
       this.addLog('INFO', '', 'Discovering services and characteristics...');
 
       await device.discoverAllServicesAndCharacteristics();
-      this.setConnectionState('connected');
-      this.addLog('INFO', '', `Connected to ${device.name || device.id}`);
+      this.addLog('INFO', '', `Discovered services for ${device.name || device.id}`);
 
-      // Inspect GATT tree
+      // Inspect GATT tree and dynamically resolve active service / characteristic UUIDs
       await this.inspectGattTree(device);
 
-      // Subscribe to TX characteristic notifications if present
-      this.setupNotifications(device);
+      // Perform Telit TIO / Hero Flow-Control Handshake
+      this.addLog('INFO', '', 'Starting cluster flow-control handshake...');
+      await this.performClusterHandshake(device);
+
+      this.setConnectionState('connected');
+      this.addLog('INFO', '', `Connected & Ready to transmit: ${device.name || device.id}`);
 
       // Listen for unexpected disconnect
       device.onDisconnected((error, disconnectedDevice) => {
         this.connectedDevice = null;
+        this.isHandshakeComplete = false;
         this.setConnectionState('disconnected');
         this.addLog(
           'ERROR',
@@ -191,12 +210,14 @@ class BleServiceImpl {
       });
     } catch (err: any) {
       this.connectedDevice = null;
+      this.isHandshakeComplete = false;
       this.setConnectionState('error');
       this.addLog('ERROR', '', `Connection failed: ${err.message || err}`);
     }
   }
 
   public async disconnect() {
+    this.isHandshakeComplete = false;
     if (this.connectedDevice) {
       try {
         await this.connectedDevice.cancelConnection();
@@ -210,7 +231,7 @@ class BleServiceImpl {
   }
 
   // ──────────────────────────────────────────────────────────────────
-  // GATT Inspection & Notifications
+  // GATT Inspection & Handshake
   // ──────────────────────────────────────────────────────────────────
 
   private async inspectGattTree(device: Device) {
@@ -218,7 +239,23 @@ class BleServiceImpl {
       const services = await device.services();
       const tree: GattServiceInfo[] = [];
 
+      let foundHeroService = false;
+      let foundTelitService = false;
+
       for (const svc of services) {
+        const sUuid = svc.uuid.toUpperCase();
+        if (
+          sUuid === HeroClusterProtocol.HERO_PRIMARY_SERVICE_UUID.toUpperCase() ||
+          sUuid.includes('E837D9A2')
+        ) {
+          foundHeroService = true;
+        } else if (
+          sUuid === HeroClusterProtocol.TELIT_SERVICE_UUID.toUpperCase() ||
+          sUuid.includes('FEFB')
+        ) {
+          foundTelitService = true;
+        }
+
         const characteristics = await svc.characteristics();
         tree.push({
           uuid: svc.uuid,
@@ -232,6 +269,30 @@ class BleServiceImpl {
           })),
         });
       }
+
+      if (foundHeroService) {
+        this.activeServiceUuid = HeroClusterProtocol.HERO_PRIMARY_SERVICE_UUID;
+        this.activeWriteCharUuid = HeroClusterProtocol.HERO_WRITE_CHAR_UUID;
+        this.activeNotifyCharUuid = HeroClusterProtocol.HERO_NOTIFY_CHAR_UUID;
+        this.activeCreditsRxCharUuid = HeroClusterProtocol.HERO_CREDITS_RX_CHAR_UUID;
+        this.activeCreditsTxCharUuid = HeroClusterProtocol.HERO_CREDITS_TX_CHAR_UUID;
+        this.addLog('INFO', '', 'GATT Mode: Hero MotoCorp 128-bit TIO Profile active');
+      } else if (foundTelitService) {
+        this.activeServiceUuid = HeroClusterProtocol.TELIT_SERVICE_UUID;
+        this.activeWriteCharUuid = HeroClusterProtocol.TELIT_RX_CHAR_UUID;
+        this.activeNotifyCharUuid = HeroClusterProtocol.TELIT_TX_CHAR_UUID;
+        this.activeCreditsRxCharUuid = HeroClusterProtocol.TELIT_CREDITS_RX_CHAR_UUID;
+        this.activeCreditsTxCharUuid = HeroClusterProtocol.TELIT_CREDITS_TX_CHAR_UUID;
+        this.addLog('INFO', '', 'GATT Mode: Legacy Telit 16-bit TIO Profile active');
+      } else {
+        this.activeServiceUuid = HeroClusterProtocol.HERO_PRIMARY_SERVICE_UUID;
+        this.activeWriteCharUuid = HeroClusterProtocol.HERO_WRITE_CHAR_UUID;
+        this.activeNotifyCharUuid = HeroClusterProtocol.HERO_NOTIFY_CHAR_UUID;
+        this.activeCreditsRxCharUuid = HeroClusterProtocol.HERO_CREDITS_RX_CHAR_UUID;
+        this.activeCreditsTxCharUuid = HeroClusterProtocol.HERO_CREDITS_TX_CHAR_UUID;
+        this.addLog('INFO', '', 'GATT Mode: Defaulting to Hero 128-bit Profile');
+      }
+
       this.gattTree = tree;
       this.notifyGattTree();
     } catch (err: any) {
@@ -239,23 +300,87 @@ class BleServiceImpl {
     }
   }
 
-  private setupNotifications(device: Device) {
+  private async performClusterHandshake(device: Device) {
     try {
-      device.monitorCharacteristicForService(
-        HeroClusterProtocol.TELIT_SERVICE_UUID,
-        HeroClusterProtocol.TELIT_TX_CHAR_UUID,
-        (error, characteristic) => {
-          if (error) {
-            return;
+      this.isHandshakeComplete = false;
+
+      // Step 1: Monitor Credits TX for Indications (36E8614B-2DED-45C1-9AD3-C9F59A01F21E)
+      try {
+        device.monitorCharacteristicForService(
+          this.activeServiceUuid,
+          this.activeCreditsTxCharUuid,
+          (error, characteristic) => {
+            if (error) return;
+            if (characteristic?.value) {
+              const buf = Buffer.from(characteristic.value, 'base64');
+              const credits = buf.length > 0 ? buf[0] : 0;
+              this.addLog('RX', `Credits TX: ${credits}`, 'Flow Control Credit Indication');
+            }
           }
-          if (characteristic?.value) {
-            const raw = Buffer.from(characteristic.value, 'base64').toString('utf-8');
-            this.addLog('RX', raw, 'Cluster Telemetry');
+        );
+        this.addLog('INFO', '', 'Handshake (1/3): Subscribed to Credits TX indications');
+      } catch (err: any) {
+        this.addLog('WARN', '', `Handshake step 1 note: ${err.message || err}`);
+      }
+
+      // Small delay between subscriptions to allow CoreBluetooth / GATT stack to process descriptor write
+      await new Promise((r) => setTimeout(r, 150));
+
+      // Step 2: Monitor Data TX for Notifications (B792A4BB-DB87-436A-9066-DB63C5FB3F00)
+      try {
+        device.monitorCharacteristicForService(
+          this.activeServiceUuid,
+          this.activeNotifyCharUuid,
+          (error, characteristic) => {
+            if (error) return;
+            if (characteristic?.value) {
+              const raw = Buffer.from(characteristic.value, 'base64').toString('utf-8');
+              this.addLog('RX', raw, 'Cluster Telemetry / Button Event');
+            }
           }
+        );
+        this.addLog('INFO', '', 'Handshake (2/3): Subscribed to Data TX notifications');
+      } catch (err: any) {
+        this.addLog('WARN', '', `Handshake step 2 note: ${err.message || err}`);
+      }
+
+      await new Promise((r) => setTimeout(r, 150));
+
+      // Step 3: Send Initial Credits (10 / 0x0A as UINT8) to Credits RX (F535DD6E-7975-4ABD-9719-491E38A81179)
+      const creditBytes = Buffer.from([HeroClusterProtocol.INITIAL_FLOW_CREDITS]);
+      const base64Credits = creditBytes.toString('base64');
+
+      let creditWritten = false;
+      try {
+        await device.writeCharacteristicWithResponseForService(
+          this.activeServiceUuid,
+          this.activeCreditsRxCharUuid,
+          base64Credits
+        );
+        creditWritten = true;
+      } catch (e) {
+        // Fall back without response if with-response is rejected
+        try {
+          await device.writeCharacteristicWithoutResponseForService(
+            this.activeServiceUuid,
+            this.activeCreditsRxCharUuid,
+            base64Credits
+          );
+          creditWritten = true;
+        } catch (e2: any) {
+          this.addLog('WARN', '', `Credit write attempt: ${e2.message || e2}`);
         }
-      );
-    } catch (e) {
-      // Service may differ on older firmware revisions
+      }
+
+      if (creditWritten) {
+        this.addLog('TX', '0x0A (10 credits)', 'Handshake (3/3): Initial UART write credits granted');
+      }
+
+      this.isHandshakeComplete = true;
+      this.addLog('INFO', '', 'Cluster Handshake COMPLETE! Buffer unlocked for transmission.');
+    } catch (err: any) {
+      this.addLog('ERROR', '', `Handshake error: ${err.message || err}`);
+      this.isHandshakeComplete = true; // allow transmissions to attempt anyway
     }
   }
 
@@ -343,8 +468,8 @@ class BleServiceImpl {
     try {
       const base64Payload = Buffer.from(payload, 'utf-8').toString('base64');
       await this.connectedDevice.writeCharacteristicWithoutResponseForService(
-        HeroClusterProtocol.TELIT_SERVICE_UUID,
-        HeroClusterProtocol.TELIT_RX_CHAR_UUID,
+        this.activeServiceUuid,
+        this.activeWriteCharUuid,
         base64Payload
       );
       this.addLog('TX', payload, description);
@@ -353,8 +478,8 @@ class BleServiceImpl {
       try {
         const base64Payload = Buffer.from(payload, 'utf-8').toString('base64');
         await this.connectedDevice.writeCharacteristicWithResponseForService(
-          HeroClusterProtocol.TELIT_SERVICE_UUID,
-          HeroClusterProtocol.TELIT_RX_CHAR_UUID,
+          this.activeServiceUuid,
+          this.activeWriteCharUuid,
           base64Payload
         );
         this.addLog('TX', payload, description);
@@ -388,7 +513,7 @@ class BleServiceImpl {
   }
 
   private addLog(
-    direction: 'TX' | 'RX' | 'INFO' | 'ERROR',
+    direction: BlePacketLog['direction'],
     rawPayload: string,
     description: string
   ) {
