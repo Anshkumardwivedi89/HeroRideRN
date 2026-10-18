@@ -44,20 +44,30 @@ export const DashboardScreen: React.FC = () => {
   };
 
   const handleOpenMaps = async () => {
-    const url = Platform.select({
-      ios: 'maps://app',
+    // Attempt to open the Google Maps native app on iOS (comgooglemaps://)
+    const googleMapsAppUrl = Platform.select({
+      ios: 'comgooglemaps://',
       android: 'google.navigation:q=',
-      default: 'https://maps.google.com',
+      default: 'https://www.google.com/maps',
     });
+
+    const googleMapsWebUrl = 'https://www.google.com/maps';
+
     try {
-      const supported = await Linking.canOpenURL(url);
-      if (supported) {
-        await Linking.openURL(url);
-      } else {
-        await Linking.openURL('https://maps.google.com');
+      const canOpen = await Linking.canOpenURL(googleMapsAppUrl);
+      if (canOpen) {
+        await Linking.openURL(googleMapsAppUrl);
+        return;
       }
     } catch {
-      await Linking.openURL('https://maps.google.com');
+      // Fall through to direct open or web URL
+    }
+
+    try {
+      await Linking.openURL(googleMapsAppUrl);
+    } catch {
+      // If Google Maps app is not installed on iPhone, open Google Maps in web browser
+      await Linking.openURL(googleMapsWebUrl);
     }
   };
 

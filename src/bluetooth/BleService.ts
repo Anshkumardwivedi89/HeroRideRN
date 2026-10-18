@@ -78,7 +78,7 @@ class BleServiceImpl {
     this.setConnectionState('scanning');
     this.addLog('INFO', '', 'Started BLE scan for Hero smart clusters...');
 
-    this.manager.startDeviceScan(null, { allowDuplicates: false }, (error, device) => {
+    this.manager.startDeviceScan(null, { allowDuplicates: true }, (error, device) => {
       if (error) {
         this.addLog('ERROR', '', `Scan error: ${error.message}`);
         this.setConnectionState(this.connectedDevice ? 'connected' : 'disconnected');
@@ -87,13 +87,20 @@ class BleServiceImpl {
 
       if (device) {
         const name = device.name || device.localName;
-        const isHero = this.isHeroClusterDevice(name, device.id);
+        const isHero = this.isHeroClusterDevice(name, device.id, device.serviceUUIDs);
+
+        const existing = this.discoveredDevices.get(device.id);
+        const resolvedName =
+          name ||
+          (isHero ? 'Hero Smart Cluster' : undefined) ||
+          (existing && existing.name !== 'Unknown Device' ? existing.name : undefined) ||
+          'Unknown Device';
 
         this.discoveredDevices.set(device.id, {
           id: device.id,
-          name: name || 'Unknown Device',
+          name: resolvedName,
           rssi: device.rssi,
-          isHeroCluster: isHero,
+          isHeroCluster: isHero || (existing?.isHeroCluster ?? false),
         });
         this.notifyDevices();
       }
@@ -113,18 +120,33 @@ class BleServiceImpl {
     this.setConnectionState(this.connectedDevice ? 'connected' : 'disconnected');
   }
 
-  private isHeroClusterDevice(name: string | null, id: string): boolean {
+  private isHeroClusterDevice(
+    name: string | null,
+    id: string,
+    serviceUUIDs?: string[] | null
+  ): boolean {
+    // 1. Check if the device advertises the Telit TIO Service UUID (0000FEFB...)
+    if (serviceUUIDs && serviceUUIDs.length > 0) {
+      const hasTelit = serviceUUIDs.some((uuid) => {
+        const u = uuid.toUpperCase();
+        return u.includes('FEFB') || u === HeroClusterProtocol.TELIT_SERVICE_UUID.toUpperCase();
+      });
+      if (hasTelit) return true;
+    }
+
+    // 2. Check device broadcast name
     if (!name) return false;
     const n = name.toUpperCase();
     return (
-      n.startsWith('HERO') ||
-      n.startsWith('HMCL') ||
-      n.startsWith('XOOM') ||
-      n.startsWith('MAESTRO') ||
-      n.startsWith('PLEASURE') ||
-      n.startsWith('DESTINI') ||
+      n.includes('HERO') ||
+      n.includes('HMCL') ||
+      n.includes('XOOM') ||
+      n.includes('MAESTRO') ||
+      n.includes('PLEASURE') ||
+      n.includes('DESTINI') ||
       n.includes('CLUSTER') ||
-      n.includes('TIO')
+      n.includes('TIO') ||
+      n.includes('RIDE')
     );
   }
 

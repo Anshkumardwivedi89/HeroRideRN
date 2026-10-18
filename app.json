@@ -19,6 +19,9 @@
         "UIBackgroundModes": [
           "bluetooth-central",
           "location"
+        ],
+        "LSApplicationQueriesSchemes": [
+          "comgooglemaps"
         ]
       }
     },
