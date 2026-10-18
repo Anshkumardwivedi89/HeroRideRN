@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   Linking,
   Platform,
+  Image,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import {
@@ -75,9 +76,15 @@ export const DashboardScreen: React.FC = () => {
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       {/* App Header */}
       <View style={styles.header}>
-        <View>
-          <Text style={styles.brandTitle}>HeroRide</Text>
-          <Text style={styles.brandSubtitle}>Hero Xoom 125 XTEC Companion</Text>
+        <View style={styles.brandRow}>
+          <Image
+            source={require('../../assets/icon.png')}
+            style={styles.headerLogo}
+          />
+          <View>
+            <Text style={styles.brandTitle}>HeroRide</Text>
+            <Text style={styles.brandSubtitle}>Hero Xoom 125 XTEC Companion</Text>
+          </View>
         </View>
 
         {/* Connection Badge */}
@@ -227,6 +234,18 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingTop: 4,
+  },
+  brandRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  headerLogo: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: 'rgba(237, 27, 36, 0.5)',
   },
   brandTitle: {
     fontSize: 26,
