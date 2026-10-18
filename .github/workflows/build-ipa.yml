@@ -49,22 +49,13 @@ jobs:
       - name: Install Dependencies
         run: npm install
 
-      - name: Ensure Swift Tools Version Compatibility
-        run: |
-          SWIFT_VER=$(swift -version | grep -oE 'Apple Swift version [0-9]+\.[0-9]+' | awk '{print $4}')
-          echo "Active Swift version: $SWIFT_VER"
-          if [ -n "$SWIFT_VER" ] && [ "$(printf '%s\n' "6.2" "$SWIFT_VER" | sort -V | head -n1)" != "6.2" ]; then
-            echo "Active Swift version $SWIFT_VER is below 6.2; patching swift-tools-version in node_modules"
-            find node_modules/ -name "Package.swift" -exec sed -i '' "s/swift-tools-version: 6.2/swift-tools-version: $SWIFT_VER/g" {} + 2>/dev/null || true
-          fi
+      - name: Ensure Swift Compatibility
+        run: node scripts/fix-swift-compatibility.js
 
       - name: Prebuild Native iOS Project
         run: |
           npx expo prebuild --platform ios --clean
-          SWIFT_VER=$(swift -version | grep -oE 'Apple Swift version [0-9]+\.[0-9]+' | awk '{print $4}')
-          if [ -n "$SWIFT_VER" ] && [ "$(printf '%s\n' "6.2" "$SWIFT_VER" | sort -V | head -n1)" != "6.2" ]; then
-            find . -name "Package.swift" -exec sed -i '' "s/swift-tools-version: 6.2/swift-tools-version: $SWIFT_VER/g" {} + 2>/dev/null || true
-          fi
+          node scripts/fix-swift-compatibility.js
 
       - name: Build and Package IPA
         run: |

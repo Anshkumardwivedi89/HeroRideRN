@@ -29,7 +29,8 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
-    "test:protocol": "node scripts/verify-protocol.js"
+    "test:protocol": "node scripts/verify-protocol.js",
+    "postinstall": "node scripts/fix-swift-compatibility.js"
   },
   "private": true
 }
